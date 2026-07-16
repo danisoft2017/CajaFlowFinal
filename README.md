@@ -56,3 +56,12 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+
+## COMANDO EN TERMINAL PARA AJILIZAR EL TRABAJO
+-> php artisan migrate : Antes estar atengo a la base de datos en .env
+-> php artisan migrate:refresh --seed Ejecutar los seeders
+-> composer install
+-> npm install
+-> php artisan serve : ejecutar
+-> npm run dev : para ejectuar react. Debe estar instalado npm install

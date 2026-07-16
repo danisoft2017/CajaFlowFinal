@@ -21,7 +21,7 @@ function Dashboard() {
 
             {/* Enlace limpio para ir al módulo de Cajas */}
             <div style={{ margin: '20px 0' }}>
-                <Link to="/cajas" style={{ 
+                <Link to="/movimientos" style={{ 
                     display: 'inline-block', 
                     padding: '8px 15px', 
                     background: '#e0e0e0', 
@@ -30,7 +30,16 @@ function Dashboard() {
                     borderRadius: '4px',
                     fontWeight: 'bold'
                 }}>
-                    Ir al Módulo de Cajas →
+                    Ir a los Movimientos →
+                </Link>
+            </div>
+            {/* Enlaces a los módulos */}
+            <div style={{ margin: '20px 0', display: 'flex', gap: '10px' }}>
+                <Link to="/cajas" style={{ padding: '8px 15px', background: '#e0e0e0', color: '#000', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
+                    Cajas →
+                </Link>
+                <Link to="/categorias" style={{ padding: '8px 15px', background: '#e0e0e0', color: '#000', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
+                    Categorías →
                 </Link>
             </div>
 

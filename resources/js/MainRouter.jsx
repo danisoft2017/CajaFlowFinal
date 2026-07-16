@@ -3,6 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import Cajas from './components/Cajas';
+import Categorias from './components/Categorias';
+import Movimientos from './components/Movimientos';
 
 function MainRouter() {
     return (
@@ -13,6 +15,8 @@ function MainRouter() {
                 <Route path="/login" element={<Login />} />
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/cajas" element={<Cajas />} />
+                <Route path="/categorias" element={<Categorias />} />
+                <Route path="/movimientos" element={<Movimientos />} />
             </Routes>
         </BrowserRouter>
     );

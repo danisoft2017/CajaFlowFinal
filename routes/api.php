@@ -3,6 +3,8 @@ use App\Http\Controllers\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\CajaController;
 use App\Http\Controllers\CategoriaController;
+use App\Http\Controllers\MovimientoController;
+
 
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -15,3 +17,5 @@ Route::get('/categorias', [CategoriaController::class, 'index']);
 Route::post('/categorias', [CategoriaController::class, 'store']);
 Route::put('/categorias/{id}', [CategoriaController::class, 'update']);
 
+Route::get('/movimientos', [MovimientoController::class, 'index']);
+Route::post('/movimientos', [MovimientoController::class, 'store']);
