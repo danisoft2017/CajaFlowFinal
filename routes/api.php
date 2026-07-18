@@ -8,6 +8,12 @@ use App\Http\Controllers\MovimientoController;
 
 
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/usuarios', [AuthController::class, 'indexUsuarios']);
+Route::put('/usuarios/{id}', [AuthController::class, 'updateUsuario']);
+Route::put('/usuarios/{id}/password', [AuthController::class, 'cambiarPassword']);
+Route::post('/usuarios', [AuthController::class, 'storeUsuario']);
+Route::patch('/usuarios/{id}/toggle', [AuthController::class, 'toggleEstado']);
+
 
 Route::get('/cajas', [CajaController::class, 'index']);
 Route::post('/cajas', [CajaController::class, 'store']);

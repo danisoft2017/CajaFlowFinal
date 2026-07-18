@@ -41,6 +41,9 @@ function Dashboard() {
                 <Link to="/categorias" style={{ padding: '8px 15px', background: '#e0e0e0', color: '#000', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
                     Categorías →
                 </Link>
+                <Link to="/usuarios" style={{ padding: '8px 15px', background: '#e0e0e0', color: '#000', textDecoration: 'none', borderRadius: '4px', fontWeight: 'bold' }}>
+                    Usuarios 👥 →
+                </Link>
             </div>
 
             <hr />

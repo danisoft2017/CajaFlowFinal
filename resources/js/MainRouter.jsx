@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import Cajas from './components/Cajas';
 import Categorias from './components/Categorias';
 import Movimientos from './components/Movimientos';
+import Usuarios from './components/Usuarios';
 
 function MainRouter() {
     return (
@@ -17,6 +18,7 @@ function MainRouter() {
                 <Route path="/cajas" element={<Cajas />} />
                 <Route path="/categorias" element={<Categorias />} />
                 <Route path="/movimientos" element={<Movimientos />} />
+                <Route path="/usuarios" element={<Usuarios />} />
             </Routes>
         </BrowserRouter>
     );
