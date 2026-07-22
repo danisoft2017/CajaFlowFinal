@@ -37,7 +37,8 @@ class AuthController extends Controller
             'user' => [
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->role
+                'role' => $user->role,
+                'avatar' => $user->avatar
             ]
         ]);
     }
@@ -90,7 +91,8 @@ class AuthController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
-            'role' => 'required|in:admin,operador' // Restringido: No se permite superadmin aquí
+            'role' => 'required|in:admin,operador',
+            'avatar' => 'string|nullable'
         ]);
 
         $user = \App\Models\User::create([
@@ -98,6 +100,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => \Illuminate\Support\Facades\Hash::make($request->password),
             'role' => $request->role,
+            'avatar' => $request->avatar??'👤',
             'activo' => true
         ]);
 
@@ -107,7 +110,8 @@ class AuthController extends Controller
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'role' => 'required|in:admin,operador' // Restringido: No se permite cambiar a superadmin
+            'role' => 'required|in:admin,operador',
+            'avatar' => 'string|nullable'
         ]);
 
         $user = \App\Models\User::find($id);
@@ -117,7 +121,8 @@ class AuthController extends Controller
 
         $user->update([
             'name' => $request->name,
-            'role' => $request->role
+            'role' => $request->role,
+            'avatar' => $request->avatar ?? $user->avatar
         ]);
 
         return response()->json($user);
@@ -135,5 +140,38 @@ class AuthController extends Controller
         ]);
 
         return response()->json($user);
+    }
+// Resumen público para la pantalla de Login (sin necesidad de token)
+    public function resumenPublico()
+    {
+        // 1. Total de Cajas Activas
+        $cajasActivas = \App\Models\Caja::count();
+
+        // 2. Fecha actual de Perú
+        $hoyPeru = \Carbon\Carbon::now('America/Lima')->toDateString();
+
+        // 3. Cantidad de Movimientos realizados hoy
+        $movimientosHoy = \App\Models\Movimiento::where('fecha', $hoyPeru)->count();
+
+        // 4. Saldo Total acumulado en el sistema (Ingresos - Egresos)
+        $movimientos = \App\Models\Movimiento::with('categoria')->get();
+        $totalIngresos = 0;
+        $totalEgresos = 0;
+
+        foreach ($movimientos as $mov) {
+            if ($mov->categoria && $mov->categoria->tipo === 'Ingreso') {
+                $totalIngresos += $mov->monto;
+            } elseif ($mov->categoria && $mov->categoria->tipo === 'Egreso') {
+                $totalEgresos += $mov->monto;
+            }
+        }
+
+        $saldoTotal = $totalIngresos - $totalEgresos;
+
+        return response()->json([
+            'cajas_activas' => $cajasActivas,
+            'movimientos_hoy' => $movimientosHoy,
+            'saldo_total' => number_format($saldoTotal, 2, '.', '')
+        ]);
     }
 }

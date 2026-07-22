@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -6,7 +6,28 @@ function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+
+    const [resumen, setResumen] = useState({
+        cajas_activas: 0,
+        saldo_total: '0.00',
+        movimientos_hoy: 0
+    });
+
     const navigate = useNavigate();
+
+    // Cargar estadísticas públicas al cargar la pantalla
+    useEffect(() => {
+        obtenerResumenPublico();
+    }, []);
+
+    const obtenerResumenPublico = async () => {
+        try {
+            const response = await axios.get('/api/resumen-publico');
+            setResumen(response.data);
+        } catch (err) {
+            console.error("Error al obtener resumen público", err);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -27,39 +48,91 @@ function Login() {
         }
     };
 
-    return (
-        <div style={{ maxWidth: '300px', margin: '50px auto', padding: '20px', background: '#fff', borderRadius: '5px' }}>
-            <h2>Iniciar Sesión</h2>
+return (
+        <div style={{ maxWidth: '650px', margin: '30px auto', fontFamily: 'sans-serif' }}>
             
-            {error && <p style={{ color: 'red' }}>{error}</p>}
+            {/* ENCABEZADO DEL SISTEMA */}
+            <div style={{ textAlign: 'center', marginBottom: '25px' }}>
+                <h1 style={{ margin: '0 0 5px 0' }}>CajaFlow</h1>
+                <p style={{ color: '#666', margin: 0 }}>Sistema de Gestión Financiera y Control de Cajas</p>
+            </div>
 
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '10px' }}>
-                    <label>Correo Electrónico:</label>
-                    <input 
-                        type="email" 
-                        value={email} 
-                        onChange={(e) => setEmail(e.target.value)} 
-                        required 
-                        style={{ width: '100%', padding: '5px', marginTop: '5px' }}
-                    />
+            {/* SECCIÓN DE RESUMEN PÚBLICO (3 TARJETAS SIMPLES) */}
+            <div style={{ display: 'flex', gap: '15px', marginBottom: '25px', justifyContent: 'space-between' }}>
+                
+                {/* Tarjeta 1: Cajas Activas */}
+                <div style={{ flex: 1, background: '#eef6ff', border: '1px solid #b6d4fe', padding: '15px', borderRadius: '5px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.9em', color: '#084298', fontWeight: 'bold' }}>Cajas Activas</span>
+                    <h2 style={{ margin: '5px 0 0 0', color: '#084298' }}>{resumen.cajas_activas}</h2>
                 </div>
 
-                <div style={{ marginBottom: '15px' }}>
-                    <label>Contraseña:</label>
-                    <input 
-                        type="password" 
-                        value={password} 
-                        onChange={(e) => setPassword(e.target.value)} 
-                        required 
-                        style={{ width: '100%', padding: '5px', marginTop: '5px' }}
-                    />
+                {/* Tarjeta 2: Saldo Total */}
+                <div style={{ flex: 1, background: '#e2f0d9', border: '1px solid #b2d8a3', padding: '15px', borderRadius: '5px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.9em', color: '#276a10', fontWeight: 'bold' }}>Saldo Total</span>
+                    <h2 style={{ margin: '5px 0 0 0', color: '#276a10' }}>S/ {resumen.saldo_total}</h2>
                 </div>
 
-                <button type="submit" style={{ width: '100%', padding: '8px', cursor: 'pointer' }}>
-                    Ingresar al sistema
-                </button>
-            </form>
+                {/* Tarjeta 3: Movimientos Hoy */}
+                <div style={{ flex: 1, background: '#fff3cd', border: '1px solid #ffecb5', padding: '15px', borderRadius: '5px', textAlign: 'center' }}>
+                    <span style={{ fontSize: '0.9em', color: '#664d03', fontWeight: 'bold' }}>Movimientos Hoy</span>
+                    <h2 style={{ margin: '5px 0 0 0', color: '#664d03' }}>{resumen.movimientos_hoy}</h2>
+                </div>
+
+            </div>
+
+            {/* FORMULARIO DE ACCESO */}
+            <div style={{ background: '#fff', border: '1px solid #ccc', padding: '25px', borderRadius: '5px' }}>
+                <h2 style={{ marginTop: 0 }}>Iniciar Sesión</h2>
+                
+                {error && (
+                    <div style={{ background: '#f8d7da', color: '#842029', padding: '10px', borderRadius: '4px', marginBottom: '15px', border: '1px solid #f5c2c7' }}>
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit}>
+                    <div style={{ marginBottom: '15px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Correo Electrónico:</label>
+                        <input 
+                            type="email" 
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)} 
+                            placeholder="ejemplo@empresa.com"
+                            required 
+                            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Contraseña:</label>
+                        <input 
+                            type="password" 
+                            value={password} 
+                            onChange={(e) => setPassword(e.target.value)} 
+                            placeholder="••••••••"
+                            required 
+                            style={{ width: '100%', padding: '8px', boxSizing: 'border-box' }}
+                        />
+                    </div>
+
+                    <button 
+                        type="submit" 
+                        style={{ 
+                            width: '100%', 
+                            padding: '10px', 
+                            background: '#000', 
+                            color: '#fff', 
+                            border: 'none', 
+                            borderRadius: '4px', 
+                            fontWeight: 'bold', 
+                            cursor: 'pointer' 
+                        }}
+                    >
+                        Ingresar al Sistema →
+                    </button>
+                </form>
+            </div>
+
         </div>
     );
 }

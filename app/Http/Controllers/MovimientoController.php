@@ -11,7 +11,7 @@ class MovimientoController extends Controller
 // Listar todos los movimientos trayendo el nombre de su caja y categoría
     public function index()
     {
-        return response()->json(Movimiento::with(['caja', 'categoria'])->get());
+        return response()->json(Movimiento::with(['caja', 'categoria','user'])->get());
     }
 
     // Registrar un nuevo movimiento
@@ -26,8 +26,15 @@ class MovimientoController extends Controller
             'monto' => 'required|numeric|min:0.01'
         ]);
 
-        $movimiento = Movimiento::create($request->all());
+        $datos = $request->all();
+        
+        // Si el request trae el id del usuario logueado lo asigna, o mediante Sanctum
+        if ($request->user()) {
+            $datos['user_id'] = $request->user()->id;
+        }
 
-        return response()->json($movimiento->load(['caja', 'categoria']), 201);
+        $movimiento = Movimiento::create($datos);
+
+        return response()->json($movimiento->load(['caja', 'categoria', 'user']), 201);
     }
 }

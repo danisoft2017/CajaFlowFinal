@@ -6,21 +6,36 @@ import Cajas from './components/Cajas';
 import Categorias from './components/Categorias';
 import Movimientos from './components/Movimientos';
 import Usuarios from './components/Usuarios';
+import Layout from './components/Layout';
 
 function MainRouter() {
+    const estaAutenticado = () => {
+        return !!localStorage.getItem('token');
+    };
+
     return (
-        <BrowserRouter>
-            <Routes>
-                {/* Al entrar a la raíz, redirige automáticamente al login */}
-                <Route path="/" element={<Navigate to="/login" />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/cajas" element={<Cajas />} />
-                <Route path="/categorias" element={<Categorias />} />
-                <Route path="/movimientos" element={<Movimientos />} />
-                <Route path="/usuarios" element={<Usuarios />} />
-            </Routes>
-        </BrowserRouter>
+        <Routes>
+            <Route path="/login" element={<Login />} />
+
+            {/* 2. ¡TODAS LAS RUTAS DEBEN TENER <Layout> ENVOLVIENDO EL COMPONENTE! */}
+            <Route path="/dashboard" element={
+                estaAutenticado() ? <Layout><Dashboard /></Layout> : <Navigate to="/login" />
+            } />
+            <Route path="/cajas" element={
+                estaAutenticado() ? <Layout><Cajas /></Layout> : <Navigate to="/login" />
+            } />
+            <Route path="/categorias" element={
+                estaAutenticado() ? <Layout><Categorias /></Layout> : <Navigate to="/login" />
+            } />
+            <Route path="/movimientos" element={
+                estaAutenticado() ? <Layout><Movimientos /></Layout> : <Navigate to="/login" />
+            } />
+            <Route path="/usuarios" element={
+                estaAutenticado() ? <Layout><Usuarios /></Layout> : <Navigate to="/login" />
+            } />
+
+            <Route path="*" element={<Navigate to="/login" />} />
+        </Routes>
     );
 }
 

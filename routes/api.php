@@ -25,3 +25,5 @@ Route::put('/categorias/{id}', [CategoriaController::class, 'update']);
 
 Route::get('/movimientos', [MovimientoController::class, 'index']);
 Route::post('/movimientos', [MovimientoController::class, 'store']);
+
+Route::get('/resumen-publico', [AuthController::class, 'resumenPublico']);
