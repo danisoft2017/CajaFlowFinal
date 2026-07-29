@@ -6,7 +6,10 @@ import Cajas from './components/Cajas';
 import Categorias from './components/Categorias';
 import Movimientos from './components/Movimientos';
 import Usuarios from './components/Usuarios';
+import Clientes from './components/Clientes';
 import Layout from './components/Layout';
+import Productos from './components/Productos';
+import Reportes from './components/Reportes';
 
 function MainRouter() {
     const estaAutenticado = () => {
@@ -32,6 +35,16 @@ function MainRouter() {
             } />
             <Route path="/usuarios" element={
                 estaAutenticado() ? <Layout><Usuarios /></Layout> : <Navigate to="/login" />
+            } />
+            <Route path="/clientes" element={
+                estaAutenticado() ? <Layout><Clientes /></Layout> : <Navigate to="/login" />
+            } />
+
+            <Route path="/productos" element={
+                estaAutenticado() ? <Layout><Productos /></Layout> : <Navigate to="/login" />
+            } />
+            <Route path="/reportes" element={
+                estaAutenticado() ? <Layout><Reportes /></Layout> : <Navigate to="/login" />
             } />
 
             <Route path="*" element={<Navigate to="/login" />} />

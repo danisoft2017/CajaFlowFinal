@@ -6,5 +6,15 @@ use Illuminate\Database\Eloquent\Model;
 
 class Categoria extends Model
 {
-    protected $fillable = ['nombre', 'tipo'];
+    protected $table = 'categorias';
+
+    protected $fillable = [
+        'nombre',
+        'tipo'
+    ];
+
+    public function detalles()
+    {
+        return $this->hasMany(DetalleMovimiento::class, 'categoria_id');
+    }
 }
