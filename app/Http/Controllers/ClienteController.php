@@ -108,4 +108,43 @@ class ClienteController extends Controller
         }
     }
 
+public function consultarSaldo($id)
+    {
+        $cliente = Cliente::findOrFail($id);
+        
+        return response()->json([
+            'cliente_id' => $cliente->id,
+            'razon' => $cliente->razon,
+            'num_documento' => $cliente->num_documento,
+            'saldo_favor' => (float)$cliente->saldo_favor
+        ]);
+    }
+
+    /**
+     * Ajustar saldo a favor (vía depósito o consumo)
+     */
+    public function ajustarSaldoFavor(Request $request, $id)
+    {
+        $request->validate([
+            'monto' => 'required|numeric', // Positivo si deposita adelanto, negativo si consume
+            'concepto' => 'required|string'
+        ]);
+
+        $cliente = Cliente::findOrFail($id);
+        
+        // Suma o resta al saldo acumulado del cliente
+        $cliente->saldo_favor = $cliente->saldo_favor + $request->monto;
+        
+        if ($cliente->saldo_favor < 0) {
+            return response()->json(['message' => 'El consumo excede el saldo a favor disponible del cliente.'], 400);
+        }
+
+        $cliente->save();
+
+        return response()->json([
+            'message' => 'Saldo actualizado correctamente',
+            'saldo_favor' => (float)$cliente->saldo_favor
+        ]);
+    }    
+
 }

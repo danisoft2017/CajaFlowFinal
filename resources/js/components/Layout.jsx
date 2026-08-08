@@ -46,8 +46,8 @@ function Layout({ children }) {
 
     const menuItems = [
         { path: '/dashboard', label: 'Dashboard', icon: 'fa-solid fa-chart-pie' },
-        { path: '/cajas', label: 'Cajas', icon: 'fa-regular fa-folder-closed' },
         { path: '/movimientos', label: 'Movimientos', icon: 'fa-solid fa-arrow-right-arrow-left' },
+        { path: '/cajas', label: 'Cajas', icon: 'fa-regular fa-folder-closed' },
         { path: '/categorias', label: 'Categorías', icon: 'fa-solid fa-tag' },
         { path: '/clientes', label: 'Clientes', icon: 'fa-regular fa-user' },
         { path: '/productos', label: 'Productos', icon: 'fa-solid fa-box-archive' },

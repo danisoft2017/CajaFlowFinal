@@ -2,74 +2,113 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Models\Categoria;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+
 
 class CategoriaController extends Controller
 {
-    public function index()
+    /**
+     * Listar categorías (Accesible para TODOS los usuarios autenticados).
+     */
+    public function index(Request $request)
     {
-        return response()->json(Categoria::all());
+        $query = Categoria::with('caja')->withCount('detallesMovimientos');
+
+        if ($request->filled('caja_id')) {
+            $query->where('caja_id', $request->caja_id);
+        }
+
+        // ORDENAR PRIMERO POR CAJA Y LUEGO POR NOMBRE DE CATEGORÍA
+        return response()->json(
+            $query->orderBy('caja_id', 'asc')
+                ->orderBy('nombre', 'asc')
+                ->get()
+        );
     }
 
+    /**
+     * Crear categoría (Solo Superadmin y Admin).
+     */
     public function store(Request $request)
     {
-        $request->validate([
-            'nombre' => 'required|string|max:255',
-            'tipo' => 'required|string|max:255',
-        ]);
+            $user = Auth::user();
+            if (!in_array($user->role, ['superadmin', 'admin'])) {
+                return response()->json([
+                    'message' => 'No tiene permisos para realizar esta acción. Requerido rol de Administrador o Superusuario.'
+                ], 403);
+            }
 
-        $categoria = Categoria::create([
-            'nombre' => $request->nombre,
-            'tipo' => $request->tipo
-        ]);
+            $request->validate([
+                'nombre'  => 'required|string|max:100',
+                'caja_id' => 'required|exists:cajas,id',
+                'tipo'    => 'required|in:INGRESO,EGRESO'
+            ]);
 
-        return response()->json($categoria, 201);
+    
+            $categoria = Categoria::create([
+                'nombre'  => trim($request->nombre),
+                'caja_id' => $request->caja_id,
+                'tipo'    => $request->tipo
+            ]);
+
+            return response()->json($categoria->load('caja'), 201);
+
+
     }
-    public function update(Request $request, int $id)
+
+    /**
+     * Editar categoría (Solo Superadmin y Admin).
+     */
+    public function update(Request $request, $id)
     {
-        $request->validate([
-            'nombre' => 'required|string|max:255',
-            'tipo' => 'required|string|max:255',
-        ]);
-
-        $categoria = Categoria::find($id);
-
-        if (!$categoria) {
-            return response()->json(['message' => 'Categoría no encontrada'], 404);
+        $user = Auth::user();
+        if (!in_array($user->role, ['superadmin', 'admin'])) {
+            return response()->json([
+                'message' => 'No tiene permisos para realizar esta acción. Requerido rol de Administrador o Superusuario.'
+            ], 403);
         }
+
+        $categoria = Categoria::findOrFail($id);
+
+        $request->validate([
+            'nombre'  => 'required|string|max:100',
+            'caja_id' => 'required|exists:cajas,id',
+            'tipo'    => 'required|in:INGRESO,EGRESO'
+        ]);
 
         $categoria->update([
-            'nombre' => $request->nombre,
-            'tipo' => $request->tipo
+            'nombre'  => $request->nombre,
+            'caja_id' => $request->caja_id,
+            'tipo'    => $request->tipo
         ]);
 
-        return response()->json($categoria);
+        return response()->json($categoria->load('caja'));
     }
 
+    /**
+     * Eliminar categoría (Solo Superadmin/Admin y si NO ha sido usada en movimientos).
+     */
     public function destroy($id)
     {
-        $categoria = Categoria::find($id);
-
-        if (!$categoria) {
-            return response()->json(['message' => 'La categoría no existe.'], 404);
-        }
-
-        // 1. Verificar si existen detalles de movimiento vinculados a esta categoría
-        $tieneMovimientos = \App\Models\DetalleMovimiento::where('categoria_id', $id)->exists();
-
-        if ($tieneMovimientos) {
+        $user = Auth::user();
+        if (!in_array($user->role, ['superadmin', 'admin'])) {
             return response()->json([
-                'message' => 'No se puede eliminar la categoría porque ya tiene registros/movimientos asociados.'
-            ], 422); // Unprocessable Entity
+                'message' => 'No tiene permisos para realizar esta acción. Requerido rol de Administrador o Superusuario.'
+            ], 403);
         }
 
-        // 2. Si no tiene ninguna relación, procedemos a eliminar
+        $categoria = Categoria::findOrFail($id);
+
+        if ($categoria->detallesMovimientos()->count() > 0) {
+            return response()->json([
+                'message' => 'No se puede eliminar la categoría "' . $categoria->nombre . '" porque ya cuenta con movimientos vinculados.'
+            ], 400);
+        }
+
         $categoria->delete();
 
-        return response()->json([
-            'message' => 'Categoría eliminada con éxito.'
-        ], 200);
+        return response()->json(['message' => 'Categoría eliminada correctamente.'], 200);
     }
-
 }

@@ -11,7 +11,12 @@ function Cajas() {
     });
     const [cargando, setCargando] = useState(true);
 
-    // Estados para el Modal Crear / Editar
+    // Obtener rol del usuario autenticado
+    const usuarioStorage = localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null;
+    const userRole = usuarioStorage?.role || 'operador';
+    const esAdminOSuper = ['superadmin', 'admin'].includes(userRole);
+
+    // Estados Modal
     const [mostrarModal, setMostrarModal] = useState(false);
     const [editando, setEditando] = useState(false);
     const [cajaId, setCajaId] = useState(null);
@@ -46,6 +51,10 @@ function Cajas() {
     };
 
     const abrirModalNuevo = () => {
+        if (!esAdminOSuper) {
+            Swal.fire('Acceso denegado', 'Solo administradores o superusuarios pueden registrar nuevas cajas.', 'warning');
+            return;
+        }
         setEditando(false);
         setCajaId(null);
         setNombreCaja('');
@@ -55,6 +64,10 @@ function Cajas() {
     };
 
     const abrirModalEditar = (caja) => {
+        if (!esAdminOSuper) {
+            Swal.fire('Acceso denegado', 'No posee los permisos para modificar esta caja.', 'warning');
+            return;
+        }
         setEditando(true);
         setCajaId(caja.id);
         setNombreCaja(caja.nombre);
@@ -72,8 +85,8 @@ function Cajas() {
 
         try {
             const token = localStorage.getItem('token');
-            const payload = { 
-                nombre: nombreCaja, 
+            const payload = {
+                nombre: nombreCaja,
                 descripcion: descripcionCaja,
                 estado: estadoCaja
             };
@@ -97,8 +110,11 @@ function Cajas() {
         }
     };
 
-    // Alternar booleano estado
     const handleToggleEstado = async (id, estadoBooleanoActual) => {
+        if (!esAdminOSuper) {
+            Swal.fire('Acceso denegado', 'No tiene permisos para modificar el estado de la caja.', 'warning');
+            return;
+        }
         const accionStr = estadoBooleanoActual ? 'desactivar' : 'activar';
         
         Swal.fire({
@@ -118,7 +134,43 @@ function Cajas() {
                     });
                     cargarCajas();
                 } catch (error) {
-                    Swal.fire('Error', 'No se pudo cambiar el estado de la caja.', 'error');
+                    Swal.fire('Error', error.response?.data?.message || 'No se pudo cambiar el estado de la caja.', 'error');
+                }
+            }
+        });
+    };
+
+    const handleEliminarCaja = (caja) => {
+        if (!esAdminOSuper) {
+            Swal.fire('Acceso denegado', 'No tiene permisos para eliminar cajas.', 'warning');
+            return;
+        }
+
+        if (caja.movimientos_count > 0) {
+            Swal.fire('No se puede eliminar', `La caja "${caja.nombre}" tiene ${caja.movimientos_count} movimiento(s) registrado(s).`, 'warning');
+            return;
+        }
+
+        Swal.fire({
+            title: `¿Eliminar la caja "${caja.nombre}"?`,
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#ef4444',
+            cancelButtonColor: '#94a3b8',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const token = localStorage.getItem('token');
+                    await axios.delete(`/api/cajas/${caja.id}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    Swal.fire('¡Eliminada!', 'La caja ha sido eliminada con éxito.', 'success');
+                    cargarCajas();
+                } catch (error) {
+                    Swal.fire('Error', error.response?.data?.message || 'No se pudo eliminar la caja.', 'error');
                 }
             }
         });
@@ -136,7 +188,6 @@ function Cajas() {
     return (
         <div className="container">
             <div className="w-100">
-                
                 {/* TARJETAS DE RESUMEN SUPERIOR */}
                 <div className="row g-3 mb-4">
                     <div className="col-12 col-md-4">
@@ -147,14 +198,12 @@ function Cajas() {
                             </h3>
                         </div>
                     </div>
-
                     <div className="col-12 col-md-4">
                         <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
                             <span className="text-muted small fw-semibold d-block mb-1">Cajas activas</span>
                             <h3 className="fw-bold text-success mb-0">{datos.cajas_activas}</h3>
                         </div>
                     </div>
-
                     <div className="col-12 col-md-4">
                         <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
                             <span className="text-muted small fw-semibold d-block mb-1">Total cajas</span>
@@ -163,24 +212,26 @@ function Cajas() {
                     </div>
                 </div>
 
-                {/* HEADER DE SECCIÓN + BOTÓN NUEVA CAJA */}
+                {/* HEADER DE SECCIÓN + BOTÓN NUEVA CAJA (SOLO ADMIN / SUPERADMIN) */}
                 <div className="d-flex justify-content-between align-items-center mb-3">
                     <h5 className="fw-bold text-dark m-0">Cajas registradas</h5>
-                    <button 
-                        onClick={abrirModalNuevo}
-                        className="btn text-white fw-semibold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2"
-                        style={{ backgroundColor: '#4f46e5', border: 'none' }}
-                    >
-                        <i className="fa-solid fa-plus fs-6"></i>
-                        <span>Nueva caja</span>
-                    </button>
+                    {esAdminOSuper && (
+                        <button
+                            onClick={abrirModalNuevo}
+                            className="btn text-white fw-semibold px-3 py-2 rounded-3 shadow-sm d-flex align-items-center gap-2"
+                            style={{ backgroundColor: '#4f46e5', border: 'none' }}
+                        >
+                            <i className="fa-solid fa-plus fs-6"></i>
+                            <span>Nueva caja</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* GRID DE CARDS DE CAJAS */}
                 <div className="row g-3">
                     {datos.cajas.length === 0 ? (
                         <div className="col-12 text-center py-5 bg-white rounded-4 border">
-                            <p className="text-muted mb-0">No hay cajas creadas. Haga clic en "+ Nueva caja" para comenzar.</p>
+                            <p className="text-muted mb-0">No hay cajas creadas.</p>
                         </div>
                     ) : (
                         datos.cajas.map((caja, idx) => {
@@ -190,78 +241,74 @@ function Cajas() {
                             return (
                                 <div key={caja.id} className="col-12 col-md-6">
                                     <div className={`card border-0 shadow-sm rounded-4 p-3 bg-white h-100 ${esInactiva ? 'opacity-75 bg-light-subtle' : ''}`}>
-                                        
-                                        {/* Header de la Card */}
                                         <div className="d-flex justify-content-between align-items-start mb-2">
-                                            <div className="d-flex align-items-center gap-2.5">
-                                                <div 
+                                            <div className="d-flex align-items-center gap-2">
+                                                <div
                                                     className="rounded-3 d-flex align-items-center justify-content-center flex-shrink-0"
-                                                    style={{ 
-                                                        width: '42px', 
-                                                        height: '42px', 
-                                                        backgroundColor: estilo.bg, 
-                                                        color: estilo.text 
-                                                    }}
+                                                    style={{ width: '42px', height: '42px', backgroundColor: estilo.bg, color: estilo.text }}
                                                 >
                                                     <i className={`fa-solid ${estilo.icon} fs-5`}></i>
                                                 </div>
                                                 <div>
-                                                    <h6 className="mb-0 fw-bold text-dark">{caja.nombre}</h6>
-                                                    {/* DESCRIPCIÓN ABAJO DEL NOMBRE */}
-                                                    <span className="text-muted extra-small d-block">{caja.descripcion}</span>
+                                                    <h6 className="fw-bold text-dark mb-0">{caja.nombre}</h6>
+                                                    <span className="text-muted extra-small d-block">{caja.descripcion || 'Sin descripción'}</span>
                                                 </div>
                                             </div>
 
-                                            {/* Botones de Acción */}
-                                            <div className="d-flex gap-1">
-                                                <button 
-                                                    onClick={() => abrirModalEditar(caja)}
-                                                    className="btn btn-light btn-sm rounded-circle text-muted p-0 d-flex align-items-center justify-content-center border-0"
-                                                    style={{ width: '32px', height: '32px' }}
-                                                    title="Editar caja"
-                                                >
-                                                    <i className="fa-solid fa-pen fs-7"></i>
-                                                </button>
-                                                {/* INTERACCIÓN TOGGLE CON CAMPO ESTADO */}
-                                                <button 
-                                                    onClick={() => handleToggleEstado(caja.id, caja.estado)}
-                                                    className={`btn btn-sm rounded-circle p-0 d-flex align-items-center justify-content-center border-0 ${esInactiva ? 'btn-light text-muted' : 'btn-light text-success'}`}
-                                                    style={{ width: '32px', height: '32px' }}
-                                                    title={esInactiva ? 'Activar caja' : 'Desactivar caja'}
-                                                >
-                                                    <i className={`fa-solid ${esInactiva ? 'fa-toggle-off' : 'fa-toggle-on'} fs-6`}></i>
-                                                </button>
-                                            </div>
+                                            {/* BOTONES DE ACCIÓN RESTRENGIDOS A ROLES ADMIN / SUPERADMIN */}
+                                            {esAdminOSuper && (
+                                                <div className="d-flex gap-1">
+                                                    <button
+                                                        onClick={() => abrirModalEditar(caja)}
+                                                        className="btn btn-light btn-sm rounded-circle text-muted p-0 d-flex align-items-center justify-content-center border-0"
+                                                        style={{ width: '32px', height: '32px' }}
+                                                        title="Editar caja"
+                                                    >
+                                                        <i className="fa-regular fa-pen-to-square"></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleToggleEstado(caja.id, caja.estado)}
+                                                        className={`btn btn-sm rounded-circle p-0 d-flex align-items-center justify-content-center border-0 ${esInactiva ? 'btn-light text-muted' : 'btn-light text-success'}`}
+                                                        style={{ width: '32px', height: '32px' }}
+                                                        title={esInactiva ? 'Activar caja' : 'Desactivar caja'}
+                                                    >
+                                                        <i className={`fa-solid ${esInactiva ? 'fa-toggle-off' : 'fa-toggle-on'} fs-6`}></i>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleEliminarCaja(caja)}
+                                                        className="btn btn-light btn-sm rounded-circle text-danger p-0 d-flex align-items-center justify-content-center border-0"
+                                                        style={{ width: '32px', height: '32px' }}
+                                                        title="Eliminar caja"
+                                                    >
+                                                        <i className="fa-regular fa-trash-can"></i>
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
 
-                                        {/* Monto Grande */}
+                                        {/* MONTO */}
                                         <div className="my-2">
                                             <h2 className="fw-bold text-dark mb-0" style={{ fontSize: '1.8rem' }}>
                                                 S/ {caja.monto.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </h2>
                                         </div>
 
-                                        {/* Barra de Progreso */}
+                                        {/* BARRA DE PROGRESO */}
                                         <div className="progress mb-2" style={{ height: '6px' }}>
-                                            <div 
-                                                className="progress-bar rounded" 
-                                                role="progressbar" 
+                                            <div
+                                                className="progress-bar rounded"
+                                                role="progressbar"
                                                 style={{ width: `${caja.pct}%`, backgroundColor: estilo.bar }}
                                             ></div>
                                         </div>
 
-                                        {/* Porcentaje y Badge de Estado Booleano */}
+                                        {/* ESTADO */}
                                         <div className="d-flex justify-content-between align-items-center extra-small">
                                             <span className="text-muted fw-semibold">{caja.pct}% del total</span>
-                                            <span 
-                                                className={`badge rounded-pill px-2.5 py-1 fw-semibold ${
-                                                    esInactiva ? 'bg-secondary text-white' : 'bg-success-subtle text-success'
-                                                }`}
-                                            >
+                                            <span className={`badge rounded-pill px-2.5 py-1 fw-semibold ${esInactiva ? 'bg-secondary text-white' : 'bg-success-subtle text-success'}`}>
                                                 {caja.estado ? 'Activa' : 'Inactiva'}
                                             </span>
                                         </div>
-
                                     </div>
                                 </div>
                             );
@@ -269,62 +316,47 @@ function Cajas() {
                     )}
                 </div>
 
-                {/* MODAL CON CAMPOS DESCRIPCIÓN Y ESTADO */}
-                {mostrarModal && (
+                {/* MODAL EDITAR / CREAR CAJA */}
+                {mostrarModal && esAdminOSuper && (
                     <div className="modal d-block backdrop-blur" style={{ backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1050 }}>
                         <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '440px' }}>
                             <div className="modal-content rounded-4 border-0 shadow p-2">
-                                
                                 <div className="modal-header border-bottom-0 pb-0">
                                     <h5 className="modal-title fw-bold text-dark fs-5">
                                         {editando ? 'Modificar caja' : 'Nueva caja'}
                                     </h5>
-                                    <button 
-                                        type="button" 
-                                        className="btn-close" 
-                                        onClick={() => setMostrarModal(false)}
-                                    ></button>
+                                    <button type="button" className="btn-close" onClick={() => setMostrarModal(false)}></button>
                                 </div>
 
                                 <form onSubmit={handleSubmitCaja} className="modal-body pt-3">
-                                    
-                                    {/* Input Nombre de la caja */}
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary mb-1">
-                                            Nombre de la caja *
-                                        </label>
-                                        <input 
-                                            type="text" 
+                                        <label className="form-label small fw-semibold text-secondary mb-1">Nombre de la caja *</label>
+                                        <input
+                                            type="text"
                                             className="form-control rounded-3 py-2 px-3 border-light-subtle bg-light"
                                             placeholder="Ej: Caja 3"
                                             value={nombreCaja}
                                             onChange={(e) => setNombreCaja(e.target.value)}
                                             required
-                                            style={{ boxShadow: 'none' }}
                                         />
                                     </div>
 
-                                    {/* Input Descripción (Nuevo campo de la BD) */}
                                     <div className="mb-3">
-                                        <label className="form-label small fw-semibold text-secondary mb-1">
-                                            Descripción o Ubicación
-                                        </label>
-                                        <input 
-                                            type="text" 
+                                        <label className="form-label small fw-semibold text-secondary mb-1">Descripción o Ubicación</label>
+                                        <input
+                                            type="text"
                                             className="form-control rounded-3 py-2 px-3 border-light-subtle bg-light"
                                             placeholder="Ej: Sucursal norte / Punto de cobro 2"
                                             value={descripcionCaja}
                                             onChange={(e) => setDescripcionCaja(e.target.value)}
-                                            style={{ boxShadow: 'none' }}
                                         />
                                     </div>
 
-                                    {/* Checkbox / Switch para Estado Booleano */}
                                     <div className="form-check form-switch mb-4">
-                                        <input 
-                                            className="form-check-input" 
-                                            type="checkbox" 
-                                            role="switch" 
+                                        <input
+                                            className="form-check-input"
+                                            type="checkbox"
+                                            role="switch"
                                             id="flexSwitchCheckChecked"
                                             checked={estadoCaja}
                                             onChange={(e) => setEstadoCaja(e.target.checked)}
@@ -335,28 +367,18 @@ function Cajas() {
                                     </div>
 
                                     <div className="border-top pt-3 d-flex gap-2 justify-content-end">
-                                        <button 
-                                            type="button" 
-                                            className="btn btn-light rounded-3 px-4 fw-semibold text-secondary"
-                                            onClick={() => setMostrarModal(false)}
-                                        >
+                                        <button type="button" className="btn btn-light rounded-3 px-4 fw-semibold text-secondary" onClick={() => setMostrarModal(false)}>
                                             Cancelar
                                         </button>
-                                        <button 
-                                            type="submit" 
-                                            className="btn text-white rounded-3 px-4 fw-semibold"
-                                            style={{ backgroundColor: '#4f46e5', border: 'none' }}
-                                        >
+                                        <button type="submit" className="btn text-white rounded-3 px-4 fw-semibold" style={{ backgroundColor: '#4f46e5', border: 'none' }}>
                                             {editando ? 'Guardar cambios' : 'Crear caja'}
                                         </button>
                                     </div>
-
                                 </form>
                             </div>
                         </div>
                     </div>
                 )}
-
             </div>
         </div>
     );

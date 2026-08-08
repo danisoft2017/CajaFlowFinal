@@ -22,4 +22,8 @@ class Caja extends Model
     {
         return $this->hasMany(Movimiento::class, 'caja_id');
     }
+    public function categorias()
+    {
+        return $this->hasMany(Categoria::class, 'caja_id');
+    }
 }

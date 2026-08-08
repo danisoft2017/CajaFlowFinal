@@ -141,14 +141,18 @@ function Productos() {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.post('/api/almacens', { nombre: nuevoAlmacenNombre }, {
+            // Se envía tanto 'descripcion' como 'nombre' para compatibilidad total con Laravel
+            await axios.post('/api/almacens', { 
+                descripcion: nuevoAlmacenNombre,
+                nombre: nuevoAlmacenNombre 
+            }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setNuevoAlmacenNombre('');
             Swal.fire('¡Almacén Creado!', '', 'success');
             cargarDatos();
         } catch (error) {
-            Swal.fire('Error', 'No se pudo crear el almacén.', 'error');
+            Swal.fire('Error', error.response?.data?.message || 'No se pudo crear el almacén.', 'error');
         }
     };
 
@@ -157,13 +161,16 @@ function Productos() {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.put(`/api/almacens/${id}`, { nombre: almacenEditandoNombre }, {
+            await axios.put(`/api/almacens/${id}`, { 
+                descripcion: almacenEditandoNombre,
+                nombre: almacenEditandoNombre 
+            }, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setAlmacenEditandoId(null);
             cargarDatos();
         } catch (error) {
-            Swal.fire('Error', 'No se pudo modificar el almacén.', 'error');
+            Swal.fire('Error', error.response?.data?.message || 'No se pudo modificar el almacén.', 'error');
         }
     };
 
@@ -540,54 +547,62 @@ function Productos() {
                                 </form>
 
                                 <h6 className="fw-bold text-dark small mb-2">Almacenes existentes:</h6>
-                                <div className="d-flex flex-column gap-2 overflow-auto" style={{ maxHeight: '220px' }}>
-                                    {almacenes.length === 0 ? (
-                                        <p className="text-muted extra-small my-2 text-center">No hay almacenes creados.</p>
-                                    ) : (
-                                        almacenes.map(alm => (
-                                            <div key={alm.id} className="p-2.5 rounded-3 border bg-white d-flex align-items-center justify-content-between">
-                                                {almacenEditandoId === alm.id ? (
-                                                    <div className="input-group input-group-sm w-100">
-                                                        <input 
-                                                            type="text" 
-                                                            className="form-control"
-                                                            value={almacenEditandoNombre}
-                                                            onChange={(e) => setAlmacenEditandoNombre(e.target.value)}
-                                                        />
-                                                        <button 
-                                                            onClick={() => handleGuardarEditAlmacen(alm.id)}
-                                                            className="btn btn-success"
-                                                        >
-                                                            <i className="fa-solid fa-check"></i>
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => setAlmacenEditandoId(null)}
-                                                            className="btn btn-light"
-                                                        >
-                                                            <i className="fa-solid fa-xmark"></i>
-                                                        </button>
+
+                                {/* DENTRO DEL MODAL DE GESTIÓN DE ALMACENES */}
+                                    <div className="d-flex flex-column gap-2 overflow-auto" style={{ maxHeight: '220px' }}>
+                                        {almacenes.length === 0 ? (
+                                            <p className="text-muted extra-small my-2 text-center">No hay almacenes creados.</p>
+                                        ) : (
+                                            almacenes.map(alm => {
+                                                // Nombre real proveniente del Backend (soporta descripcion, nombre o fallback)
+                                                const nombreMostrar = alm.descripcion || alm.nombre || alm.nombre_almacen || `Almacén #${alm.id}`;
+
+                                                return (
+                                                    <div key={alm.id} className="p-2.5 rounded-3 border bg-white d-flex align-items-center justify-content-between">
+                                                        {almacenEditandoId === alm.id ? (
+                                                            <div className="input-group input-group-sm w-100">
+                                                                <input 
+                                                                    type="text" 
+                                                                    className="form-control"
+                                                                    value={almacenEditandoNombre}
+                                                                    onChange={(e) => setAlmacenEditandoNombre(e.target.value)}
+                                                                />
+                                                                <button 
+                                                                    onClick={() => handleGuardarEditAlmacen(alm.id)}
+                                                                    className="btn btn-success"
+                                                                >
+                                                                    <i className="fa-solid fa-check"></i>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => setAlmacenEditandoId(null)}
+                                                                    className="btn btn-light"
+                                                                >
+                                                                    <i className="fa-solid fa-xmark"></i>
+                                                                </button>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                <div className="d-flex align-items-center gap-2">
+                                                                    <i className="fa-solid fa-warehouse text-muted"></i>
+                                                                    {/* AHORA SÍ MUESTRA EL NOMBRE REAL */}
+                                                                    <span className="fw-semibold text-dark small">{nombreMostrar}</span>
+                                                                </div>
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        setAlmacenEditandoId(alm.id);
+                                                                        setAlmacenEditandoNombre(nombreMostrar);
+                                                                    }}
+                                                                    className="btn btn-light btn-sm border text-secondary px-2 py-1 rounded-2"
+                                                                >
+                                                                    <i className="fa-regular fa-pen-to-square me-1"></i> Editar
+                                                                </button>
+                                                            </>
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <>
-                                                        <div className="d-flex align-items-center gap-2">
-                                                            <i className="fa-solid fa-warehouse text-muted"></i>
-                                                            <span className="fw-semibold text-dark small">{alm.nombre}</span>
-                                                        </div>
-                                                        <button 
-                                                            onClick={() => {
-                                                                setAlmacenEditandoId(alm.id);
-                                                                setAlmacenEditandoNombre(alm.nombre);
-                                                            }}
-                                                            className="btn btn-light btn-sm border text-secondary px-2 py-1 rounded-2"
-                                                        >
-                                                            <i className="fa-regular fa-pen-to-square me-1"></i> Editar
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
+                                                );
+                                            })
+                                        )}
+                                    </div>
 
                                 <div className="border-top pt-3 mt-3 text-end">
                                     <button 

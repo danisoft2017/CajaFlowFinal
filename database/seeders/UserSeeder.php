@@ -15,26 +15,26 @@ class UserSeeder extends Seeder
     {
         // 1. Usuario Superadmin (Control total y creación de usuarios)
         User::create([
-            'name' => 'Ana García',
-            'email' => 'ana.garcia@empresa.com',
-            'password' => Hash::make('admin123'),
+            'name' => 'Elvis Flores',
+            'email' => 'elvis.flores@icanet.pe',
+            'password' => Hash::make('1a2b3c4D'),
             'role' => 'superadmin',
         ]);
 
         // 2. Usuario Administrador 
-        User::create([
-            'name' => 'Carlos Mendoza',
-            'email' => 'carlos.admin@empresa.com',
-            'password' => Hash::make('admin123'),
-            'role' => 'admin',
-        ]);
+        // User::create([
+        //     'name' => 'Carlos Mendoza',
+        //     'email' => 'carlos.admin@empresa.com',
+        //     'password' => Hash::make('admin123'),
+        //     'role' => 'admin',
+        // ]);
 
-        // 3. Usuario Operador (Solo ve sus movimientos asignados)
-        User::create([
-            'name' => 'Juan Pérez',
-            'email' => 'juan.ops@empresa.com',
-            'password' => Hash::make('admin123'),
-            'role' => 'operador',
-        ]);
+        // // 3. Usuario Operador (Solo ve sus movimientos asignados)
+        // User::create([
+        //     'name' => 'Juan Pérez',
+        //     'email' => 'juan.ops@empresa.com',
+        //     'password' => Hash::make('admin123'),
+        //     'role' => 'operador',
+        // ]);
     }
 }

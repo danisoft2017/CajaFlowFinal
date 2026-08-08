@@ -65,3 +65,4 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 -> npm install
 -> php artisan serve : ejecutar
 -> npm run dev : para ejectuar react. Debe estar instalado npm install
+-> npm run build

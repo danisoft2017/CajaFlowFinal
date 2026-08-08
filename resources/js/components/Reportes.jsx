@@ -1,76 +1,59 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Swal from 'sweetalert2';
-import DataTable from 'react-data-table-component';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 function Reportes() {
+    const obtenerFechaPeru = () => {
+        const opciones = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
+        const partes = new Intl.DateTimeFormat('es-PE', opciones).formatToParts(new Date());
+        return `${partes.find(p => p.type === 'year').value}-${partes.find(p => p.type === 'month').value}-${partes.find(p => p.type === 'day').value}`;
+    };
+
+    const fechaHoy = obtenerFechaPeru();
+
+    // Filtros
+    const [fechaDesde, setFechaDesde] = useState(fechaHoy);
+    const [fechaHasta, setFechaHasta] = useState(fechaHoy);
+    const [cajaFiltroId, setCajaFiltroId] = useState('');
+    const [buscarFiltro, setBuscarFiltro] = useState('');
+
+    // Datos
     const [cajas, setCajas] = useState([]);
     const [categorias, setCategorias] = useState([]);
     const [movimientos, setMovimientos] = useState([]);
     const [cargando, setCargando] = useState(false);
 
-    // Helper fecha Perú YYYY-MM-DD
-    const obtenerFechaPeru = () => {
-        const opciones = { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' };
-        const partes = new Intl.DateTimeFormat('es-PE', opciones).formatToParts(new Date());
-        const d = partes.find(p => p.type === 'day').value;
-        const m = partes.find(p => p.type === 'month').value;
-        const a = partes.find(p => p.type === 'year').value;
-        return `${a}-${m}-${d}`;
-    };
-
-    const fechaHoy = obtenerFechaPeru();
-
-    // Filtros del Reporte
-    const [cajaIdFilter, setCajaIdFilter] = useState('TODAS'); // 'TODAS' o ID
-    const [fechaDesde, setFechaDesde] = useState(fechaHoy);
-    const [fechaHasta, setFechaHasta] = useState(fechaHoy);
-    const [buscarText, setBuscarText] = useState('');
-
     useEffect(() => {
-        cargarInicial();
+        cargarFiltrosIniciales();
     }, []);
 
-    const cargarInicial = async () => {
+    const cargarFiltrosIniciales = async () => {
         try {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Bearer ${token}` } };
-
             const [resCajas, resCats] = await Promise.all([
                 axios.get('/api/cajas', config),
                 axios.get('/api/categorias', config)
             ]);
-
-            const listaCajas = Array.isArray(resCajas.data) ? resCajas.data : (resCajas.data.cajas || []);
-            setCajas(listaCajas);
+            setCajas(Array.isArray(resCajas.data) ? resCajas.data : (resCajas.data.cajas || []));
             setCategorias(Array.isArray(resCats.data) ? resCats.data : []);
-
-            consultarReporte();
+            generarReporte();
         } catch (error) {
-            console.error("Error al cargar datos iniciales", error);
+            console.error("Error al cargar filtros iniciales", error);
         }
     };
 
-    const consultarReporte = async () => {
-        if (fechaDesde > fechaHasta) {
-            Swal.fire('Atención', 'La fecha "Desde" no puede ser mayor que la fecha "Hasta".', 'warning');
-            return;
-        }
-
+    const generarReporte = async () => {
         setCargando(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`/api/movimientos?fecha_desde=${fechaDesde}&fecha_hasta=${fechaHasta}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-
-            const data = Array.isArray(res.data) ? res.data : [];
-            setMovimientos(data);
+            const url = `/api/movimientos?fecha_desde=${fechaDesde}&fecha_hasta=${fechaHasta}`;
+            const res = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });
+            setMovimientos(Array.isArray(res.data) ? res.data : []);
         } catch (error) {
-            console.error("Error al consultar reporte", error);
-            Swal.fire('Error', 'No se pudieron obtener los movimientos.', 'error');
+            Swal.fire('Error', 'No se pudieron consultar los movimientos.', 'error');
         } finally {
             setCargando(false);
         }
@@ -78,473 +61,485 @@ function Reportes() {
 
     const formatearSoles = (monto) => {
         const val = parseFloat(monto) || 0;
-        return new Intl.NumberFormat('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        }).format(val);
+        return 'S/ ' + new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
     };
 
-    // Filtro local por caja y búsqueda
+    // --- AGRUPACIÓN POR CAJA ---
     const movimientosFiltrados = movimientos.filter(m => {
-        const perteneceCaja = (cajaIdFilter === 'TODAS') ? true : m.caja_id == cajaIdFilter;
-        if (!perteneceCaja) return false;
-        if (!buscarText.trim()) return true;
+        const coincideCaja = !cajaFiltroId || m.caja_id === parseInt(cajaFiltroId);
+        const busqueda = buscarFiltro.toLowerCase();
+        const clienteNom = m.cliente?.razon?.toLowerCase() || '';
+        const clienteDoc = m.cliente?.num_documento?.toLowerCase() || '';
+        const desc = m.descripcion?.toLowerCase() || '';
+        const obs = m.observacion?.toLowerCase() || '';
 
-        const term = buscarText.toLowerCase();
-        const descMatch = m.descripcion?.toLowerCase().includes(term);
-        const cliMatch = m.cliente?.razon?.toLowerCase().includes(term) || m.cliente?.num_documento?.includes(term);
-        const prodMatch = m.producto?.descripcion?.toLowerCase().includes(term);
-        return descMatch || cliMatch || prodMatch;
+        const coincideBusqueda = !buscarFiltro || clienteNom.includes(busqueda) || clienteDoc.includes(busqueda) || desc.includes(busqueda) || obs.includes(busqueda);
+
+        return coincideCaja && coincideBusqueda;
     });
 
-    // Totales del período
-    const totalIngresos = movimientosFiltrados.filter(m => parseFloat(m.monto) > 0).reduce((acc, m) => acc + parseFloat(m.monto), 0);
-    const totalEgresos = movimientosFiltrados.filter(m => parseFloat(m.monto) < 0).reduce((acc, m) => acc + Math.abs(parseFloat(m.monto)), 0);
-    const saldoNeto = movimientosFiltrados.reduce((acc, m) => acc + parseFloat(m.monto), 0);
+    // Agrupar por ID de Caja
+    const agrupadoPorCaja = movimientosFiltrados.reduce((acc, m) => {
+        const idCaja = m.caja_id || 0;
+        const nombreCaja = m.caja ? m.caja.nombre : `Caja #${idCaja}`;
 
+        if (!acc[idCaja]) {
+            acc[idCaja] = {
+                id: idCaja,
+                nombre: nombreCaja,
+                movimientos: [],
+                totalIngresos: 0,
+                totalEgresos: 0,
+                neto: 0
+            };
+        }
 
-    // =========================================================
-    // 📄 GENERACIÓN DE PDF: TABLA CRUZADA (SOLO CATEGORÍAS DE INGRESO)
-    // =========================================================
-    const generarPDF = () => {
-        if (movimientosFiltrados.length === 0) {
-            Swal.fire('Atención', 'No hay datos en la tabla para exportar.', 'warning');
+        const monto = parseFloat(m.monto);
+        acc[idCaja].movimientos.push(m);
+        if (monto >= 0) {
+            acc[idCaja].totalIngresos += monto;
+        } else {
+            acc[idCaja].totalEgresos += Math.abs(monto);
+        }
+        acc[idCaja].neto += monto;
+
+        return acc;
+    }, {});
+
+    const listaGruposCaja = Object.values(agrupadoPorCaja);
+
+    // Totales generales
+    const granTotalIngresos = listaGruposCaja.reduce((acc, g) => acc + g.totalIngresos, 0);
+    const granTotalEgresos = listaGruposCaja.reduce((acc, g) => acc + g.totalEgresos, 0);
+    const granTotalNeto = granTotalIngresos - granTotalEgresos;
+
+    // --- GENERACIÓN DE PDF PERSONALIZADO ---
+    const exportarPDF = () => {
+        if (listaGruposCaja.length === 0) {
+            Swal.fire('Atención', 'No hay datos para exportar en el período seleccionado.', 'warning');
             return;
         }
 
         const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-        // Nombre de la caja filtrada
-        const nombreCaja = cajaIdFilter === 'TODAS' 
-            ? 'TODAS LAS CAJAS' 
-            : (cajas.find(c => c.id == cajaIdFilter)?.nombre || 'CAJA').toUpperCase();
-
-        // 1. TÍTULO Y SUBTÍTULO
+        // Título del PDF
+        doc.setFontSize(14);
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(13);
-        doc.text(`REPORTE DE MOVIMIENTO DE CAJA ${nombreCaja}`, 148, 12, { align: 'center' });
-
-        doc.setFontSize(9);
+        doc.text("REPORTE DE MOVIMIENTO DE CAJAS", 14, 15);
+        doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text(`Reporte interno entre las fechas ${fechaDesde} y ${fechaHasta}`, 148, 17, { align: 'center' });
+        doc.text(`Reporte interno entre las fechas ${fechaDesde} al ${fechaHasta}`, 14, 21);
 
-        // FILTRAR ÚNICAMENTE LAS CATEGORÍAS DE TIPO INGRESO PARA LAS COLUMNAS
-        const categoriasIngreso = categorias.filter(c => {
-            const t = c.tipo ? c.tipo.toLowerCase() : '';
-            return t === 'ingreso' || t === 'ingresos';
-        }).map(c => ({ id: c.id, nombre: c.nombre.toUpperCase() }));
+        let currentY = 26;
 
-        // ENCABEZADOS DE LA TABLA: Primeras 4 columnas + Categorías de Ingreso + TOTAL
-        const tableHeaders = [
-            'Fecha y Hora',
-            'Caja',
-            'Cliente',
-            'Descripción y Producto',
-            ...categoriasIngreso.map(c => c.nombre),
-            'TOTAL'
-        ];
+        // Extraer categorías dinámicamente o usar las registradas
+        const listaNombresCategorias = categorias.length > 0 
+            ? categorias.map(c => c.nombre.toUpperCase()) 
+            : ['PENDIENTE', 'AREQUIPA', 'BCP', 'YAPE', 'PLIN', 'EFECTIVO'];
 
-        // MAPPING DE FILAS Y TOTALES
-        const tableRows = [];
-        const acumTotalesColumna = {};
-        categoriasIngreso.forEach(c => { acumTotalesColumna[c.id] = 0; });
-        let granTotalGeneral = 0;
+        // Recorrer cada Caja
+        listaGruposCaja.forEach((grupo) => {
+            // Nombre de la Caja
+            doc.setFontSize(11);
+            doc.setFont('helvetica', 'bold');
+            doc.text(grupo.nombre.toUpperCase(), 14, currentY);
+            currentY += 3;
 
-        movimientosFiltrados.forEach(m => {
-            const fechaHora = `${m.fecha}\n${m.hora}`;
-            const cajaNombre = m.caja?.nombre || '-';
-            const clienteStr = m.cliente ? `${m.cliente.razon}\n${m.cliente.num_documento || ''}` : '-';
-            const descProd = `${m.descripcion}${m.producto ? '\n' + m.producto.descripcion : ''}`;
+            // Encabezados
+            const tableHeaders = [['FECHA', 'CLIENTE', 'DESCRIPCION', ...listaNombresCategorias, 'TOTAL']];
 
-            const totalMontoFila = parseFloat(m.monto || 0);
+            // Acumuladores por categoría
+            const acumuladosCat = { TOTAL: 0 };
+            listaNombresCategorias.forEach(c => acumuladosCat[c] = 0);
 
-            // Mapear valores únicamente para categorías de tipo INGRESO
-            const rowCatCells = categoriasIngreso.map(cat => {
-                let montoCatEnFila = 0;
+            // Filas
+            const tableRows = grupo.movimientos.map(m => {
+                const fechaHora = `${m.fecha}\n${m.hora}`;
+                const clienteStr = m.cliente ? `${m.cliente.razon}\n${m.cliente.num_documento || ''}` : '- Eventual -';
+                const descStr = m.descripcion || '-';
 
-                if (m.detalles && m.detalles.length > 0) {
-                    const det = m.detalles.find(d => d.categoria_id === cat.id);
+                const fila = [fechaHora, clienteStr, descStr];
+
+                // Mapeo por columna de categoría
+                listaNombresCategorias.forEach(catNombre => {
+                    const det = m.detalles?.find(d => d.categoria?.nombre?.toUpperCase() === catNombre);
                     if (det) {
-                        montoCatEnFila = parseFloat(det.importe);
+                        const imp = parseFloat(det.importe);
+                        fila.push(imp !== 0 ? formatearSoles(imp) : '');
+                        acumuladosCat[catNombre] += imp;
+                    } else {
+                        fila.push('');
                     }
-                }
+                });
 
-                // Solo si el valor es positivo (> 0) lo acumulamos y mostramos en la columna
-                if (montoCatEnFila > 0) {
-                    acumTotalesColumna[cat.id] += montoCatEnFila;
-                    return formatearSoles(montoCatEnFila);
-                }
-                
-                // Si no hay ingreso en esta categoría, la celda queda vacía
-                return '';
+                const totalMov = parseFloat(m.monto);
+                fila.push(formatearSoles(totalMov));
+                acumuladosCat.TOTAL += totalMov;
+
+                return fila;
             });
 
-            granTotalGeneral += totalMontoFila;
+            // Fila de Totales de la Caja
+            const filaTotal = ['TOTAL', '', ''];
+            listaNombresCategorias.forEach(catNombre => {
+                const val = acumuladosCat[catNombre];
+                filaTotal.push(val !== 0 ? formatearSoles(val) : '');
+            });
+            filaTotal.push(formatearSoles(acumuladosCat.TOTAL));
 
-            tableRows.push([
-                fechaHora,
-                cajaNombre,
-                clienteStr,
-                descProd,
-                ...rowCatCells,
-                formatearSoles(totalMontoFila) // Si es egreso negativo, viaja directamente a TOTAL
-            ]);
+            tableRows.push(filaTotal);
+
+            // Renderizar Tabla de la Caja
+            autoTable(doc, {
+                startY: currentY,
+                head: tableHeaders,
+                body: tableRows,
+                theme: 'grid',
+                styles: { fontSize: 7, cellPadding: 2, valign: 'middle' },
+                headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center' },
+                didParseCell: function (data) {
+                    if (data.row.index === tableRows.length - 1) {
+                        data.cell.styles.fontStyle = 'bold';
+                        data.cell.styles.fillColor = [245, 245, 245];
+                    }
+                }
+            });
+
+            currentY = doc.lastAutoTable.finalY + 8;
         });
 
-        // FILA DE TOTALES EN EL PIE DE LA TABLA
-        const totalRow = [
-            '',
-            '',
-            '',
-            'TOTAL',
-            ...categoriasIngreso.map(cat => formatearSoles(acumTotalesColumna[cat.id])),
-            formatearSoles(granTotalGeneral)
-        ];
-
-        tableRows.push(totalRow);
-
-        // CONFIGURACIÓN DE AUTOTABLE
-        autoTable(doc, {
-            startY: 22,
-            head: [tableHeaders],
-            body: tableRows,
-            theme: 'grid',
-            headStyles: {
-                fillColor: [120, 120, 120], // Fondo gris de encabezados
-                textColor: [255, 255, 255],
-                fontStyle: 'bold',
-                halign: 'center',
-                valign: 'middle',
-                fontSize: 8
-            },
-            bodyStyles: {
-                fontSize: 7.5,
-                valign: 'middle'
-            },
-            columnStyles: {
-                0: { cellWidth: 26, halign: 'center', fontStyle: 'bold' },
-                1: { cellWidth: 20, halign: 'center' },
-                2: { cellWidth: 38 },
-                3: { cellWidth: 42 }
-            },
-            didParseCell: function (data) {
-                // Alineación a la derecha para celdas numéricas
-                if (data.column.index >= 4) {
-                    data.cell.styles.halign = 'right';
-                }
-                // Resaltado de la fila de totales
-                if (data.row.index === tableRows.length - 1) {
-                    data.cell.styles.fontStyle = 'bold';
-                    data.cell.styles.fillColor = [240, 240, 240];
-                }
-            }
-        });
-
-        // =========================================================
-        // 📊 SEGUNDA TABLA: REPORTE OTRAS CAJAS (SALDOS TOTALES)
-        // =========================================================
-        const finalY = doc.lastAutoTable.finalY + 8;
-
-        doc.setFont('helvetica', 'bold');
+        // TABLA RESUMEN CAJAS
         doc.setFontSize(11);
-        doc.text('Reporte Otras Cajas', 14, finalY);
+        doc.setFont('helvetica', 'bold');
+        doc.text("RESUMEN GENERAL POR CAJA", 14, currentY);
+        currentY += 3;
 
-        const otrasCajasRows = [];
-        cajas.forEach(c => {
-            const movsCaja = movimientos.filter(m => m.caja_id == c.id);
-            const saldoCaja = movsCaja.reduce((acc, m) => acc + parseFloat(m.monto), 0);
-            otrasCajasRows.push([c.nombre.toUpperCase(), formatearSoles(saldoCaja)]);
-        });
+        const resumenBody = listaGruposCaja.map(g => [
+            g.nombre,
+            formatearSoles(g.totalIngresos),
+            formatearSoles(g.totalEgresos),
+            formatearSoles(g.neto)
+        ]);
 
         autoTable(doc, {
-            startY: finalY + 3,
-            head: [],
-            body: otrasCajasRows,
+            startY: currentY,
+            head: [['CAJA', 'INGRESO', 'EGRESO', 'NETO']],
+            body: resumenBody,
             theme: 'grid',
-            tableWidth: 65,
-            margin: { left: 14 },
-            bodyStyles: {
-                fontSize: 8,
-                fontStyle: 'bold'
-            },
-            columnStyles: {
-                0: { cellWidth: 38, halign: 'left' },
-                1: { cellWidth: 27, halign: 'right' }
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' }
+        });
+
+        currentY = doc.lastAutoTable.finalY + 8;
+
+        // TABLA RESUMEN POR CLIENTE
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text("TOTAL DE MOVIMIENTO POR CLIENTE", 14, currentY);
+        currentY += 3;
+
+        const agrupadoCliente = movimientosFiltrados.reduce((acc, m) => {
+            const nom = m.cliente ? m.cliente.razon : 'Cliente Eventual';
+            acc[nom] = (acc[nom] || 0) + parseFloat(m.monto);
+            return acc;
+        }, {});
+
+        const clientesBody = Object.entries(agrupadoCliente).map(([nombre, monto]) => [
+            nombre,
+            formatearSoles(monto)
+        ]);
+
+        clientesBody.push(['Total', formatearSoles(granTotalNeto)]);
+
+        autoTable(doc, {
+            startY: currentY,
+            head: [['CLIENTE', 'MONTO TOTAL']],
+            body: clientesBody,
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2 },
+            headStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
+            didParseCell: function (data) {
+                if (data.row.index === clientesBody.length - 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = [245, 245, 245];
+                }
             }
         });
 
-        doc.save(`Reporte_Movimiento_Caja_${fechaDesde}_al_${fechaHasta}.pdf`);
-    };
-
-    // Columnas para el DataTable en pantalla
-    const columnasReporte = [
-        {
-            name: 'Fecha / Hora',
-            selector: row => `${row.fecha} ${row.hora}`,
-            sortable: true,
-            width: '180px',
-            cell: row => {
-                const nombreUsuario = row.user?.name || 'Usuario';
-                const inicialUsuario = nombreUsuario.charAt(0).toUpperCase();
-                return (
-                    <div className="d-flex align-items-center gap-2 py-1">
-                        <div 
-                            className="rounded-circle fw-bold text-white d-flex align-items-center justify-content-center flex-shrink-0 shadow-sm"
-                            style={{ width: '28px', height: '28px', backgroundColor: '#4f46e5', fontSize: '0.8rem' }}
-                            title={`Registrado/Editado por: ${nombreUsuario}`}
-                        >
-                            {inicialUsuario}
-                        </div>
-                        <div>
-                            <span className="fw-bold text-dark d-block">{row.fecha}</span>
-                            <span className="text-muted extra-small"><i className="fa-regular fa-clock me-1"></i>{row.hora}</span>
-                        </div>
-                    </div>
-                );
-            }
-        },
-        {
-            name: 'Caja',
-            selector: row => row.caja ? row.caja.nombre : '',
-            sortable: true,
-            width: '120px',
-            cell: row => (
-                <span className="badge bg-light text-primary border px-2 py-1 fw-semibold">
-                    <i className="fa-solid fa-cash-register me-1"></i>
-                    {row.caja ? row.caja.nombre : 'Caja'}
-                </span>
-            )
-        },
-        {
-            name: 'Cliente',
-            selector: row => row.cliente ? row.cliente.razon : '',
-            sortable: true,
-            cell: row => (
-                row.cliente ? (
-                    <div>
-                        <span className="fw-bold text-dark d-block">{row.cliente.razon}</span>
-                        <span className="text-muted extra-small">{row.cliente.num_documento}</span>
-                    </div>
-                ) : <span className="text-muted">-</span>
-            )
-        },
-        {
-            name: 'Descripción / Producto',
-            selector: row => row.descripcion,
-            sortable: true,
-            grow: 1.5,
-            cell: row => (
-                <div>
-                    <strong className="text-dark d-block">{row.descripcion}</strong>
-                    {row.producto && (
-                        <span className="badge bg-light text-secondary border extra-small mt-1">
-                            <i className="fa-solid fa-box me-1"></i>{row.producto.descripcion}
-                        </span>
-                    )}
-                </div>
-            )
-        },
-        {
-            name: 'Categorías (Desglose)',
-            cell: row => (
-                row.detalles && row.detalles.length > 0 ? (
-                    <div className="d-flex flex-column gap-1 py-1">
-                        {row.detalles.map((d, i) => {
-                            const imp = parseFloat(d.importe);
-                            const esIng = imp >= 0;
-                            return (
-                                <span key={i} className={`extra-small d-inline-flex align-items-center gap-1 ${esIng ? 'text-success' : 'text-danger'}`}>
-                                    <i className={`fa-solid ${esIng ? 'fa-plus-circle' : 'fa-minus-circle'}`}></i>
-                                    <strong>{d.categoria?.nombre}:</strong> S/ {formatearSoles(imp)}
-                                </span>
-                            );
-                        })}
-                    </div>
-                ) : <span className="text-muted">-</span>
-            )
-        },
-        {
-            name: 'Monto (S/)',
-            selector: row => parseFloat(row.monto),
-            sortable: true,
-            right: true,
-            width: '135px',
-            cell: row => {
-                const val = parseFloat(row.monto);
-                const esPos = val >= 0;
-                return (
-                    <span className={`fw-bold fs-6 ${esPos ? 'text-success' : 'text-danger'}`}>
-                        {esPos ? '+' : ''} S/ {formatearSoles(val)}
-                    </span>
-                );
-            }
-        },
-        {
-            name: 'Observación',
-            selector: row => row.observacion || '',
-            sortable: true,
-            cell: row => <span className="text-muted extra-small">{row.observacion || '-'}</span>
-        }
-    ];
-
-    const opcionesPaginacion = {
-        rowsPerPageText: 'Filas por página:',
-        rangeSeparatorText: 'de',
-        selectAllRowsItem: true,
-        selectAllRowsItemText: 'Todos'
+        doc.save(`Reporte_Movimientos_${fechaDesde}_al_${fechaHasta}.pdf`);
     };
 
     return (
-        <div className="w-100">
+        <div className="container-fluid px-4 py-3">
             
-            {/* PANEL DE FILTROS Y BOTÓN PDF */}
+            {/* ENCABEZADO Y FILTROS */}
             <div className="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h6 className="fw-bold text-dark m-0">
-                        <i className="fa-solid fa-filter text-primary me-2"></i>
-                        Filtros del Reporte
-                    </h6>
+                <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                    <h5 className="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                        <i className="fa-solid fa-chart-line text-primary fs-4"></i>
+                        <span>Reporte Resumen de Movimientos por Caja</span>
+                    </h5>
 
-                    <button 
-                        onClick={generarPDF}
-                        disabled={cargando || movimientosFiltrados.length === 0}
-                        className="btn btn-danger fw-semibold px-3 py-2 rounded-3 shadow-sm d-inline-flex align-items-center gap-2"
-                    >
-                        <i className="fa-solid fa-file-pdf fs-6"></i>
-                        <span>Descargar PDF</span>
-                    </button>
+                    <div className="d-flex gap-2">
+                        <button 
+                            onClick={exportarPDF} 
+                            className="btn btn-danger text-white fw-semibold rounded-3 d-inline-flex align-items-center gap-2 shadow-sm"
+                        >
+                            <i className="fa-solid fa-file-pdf"></i>
+                            <span>Exportar PDF</span>
+                        </button>
+
+                        <button 
+                            onClick={() => window.print()} 
+                            className="btn btn-light border text-secondary fw-semibold rounded-3 d-inline-flex align-items-center gap-2"
+                        >
+                            <i className="fa-solid fa-print"></i>
+                            <span>Imprimir</span>
+                        </button>
+                    </div>
                 </div>
 
+                {/* FILTROS DE FECHAS Y CAJAS */}
                 <div className="row g-3 align-items-end">
-                    
-                    <div className="col-12 col-sm-6 col-md-3">
-                        <label className="form-label small fw-semibold text-secondary mb-1">Fecha Desde *</label>
+                    <div className="col-12 col-md-3">
+                        <label className="form-label small fw-semibold text-secondary mb-1">Desde</label>
                         <input 
                             type="date" 
-                            className="form-control rounded-3 py-2 px-3 border-light-subtle bg-light text-dark fw-semibold" 
+                            className="form-control rounded-3 py-2 border-light-subtle bg-light fw-bold text-primary"
                             value={fechaDesde}
                             onChange={(e) => setFechaDesde(e.target.value)}
                         />
                     </div>
 
-                    <div className="col-12 col-sm-6 col-md-3">
-                        <label className="form-label small fw-semibold text-secondary mb-1">Fecha Hasta *</label>
+                    <div className="col-12 col-md-3">
+                        <label className="form-label small fw-semibold text-secondary mb-1">Hasta</label>
                         <input 
                             type="date" 
-                            className="form-control rounded-3 py-2 px-3 border-light-subtle bg-light text-dark fw-semibold" 
+                            className="form-control rounded-3 py-2 border-light-subtle bg-light fw-bold text-primary"
                             value={fechaHasta}
                             onChange={(e) => setFechaHasta(e.target.value)}
                         />
                     </div>
 
-                    <div className="col-12 col-sm-6 col-md-3">
-                        <label className="form-label small fw-semibold text-secondary mb-1">Caja Seleccionada</label>
+                    <div className="col-12 col-md-3">
+                        <label className="form-label small fw-semibold text-secondary mb-1">Filtrar Caja</label>
                         <select 
-                            className="form-select rounded-3 py-2 border-light-subtle bg-light text-dark"
-                            value={cajaIdFilter}
-                            onChange={(e) => setCajaIdFilter(e.target.value)}
+                            className="form-select rounded-3 py-2 border-light-subtle bg-light fw-semibold"
+                            value={cajaFiltroId}
+                            onChange={(e) => setCajaFiltroId(e.target.value)}
                         >
-                            <option value="TODAS">-- Todas las Cajas --</option>
+                            <option value="">-- Todas las Cajas --</option>
                             {cajas.map(c => (
                                 <option key={c.id} value={c.id}>{c.nombre}</option>
                             ))}
                         </select>
                     </div>
 
-                    <div className="col-12 col-sm-6 col-md-3">
+                    <div className="col-12 col-md-3">
                         <button 
-                            onClick={consultarReporte}
+                            onClick={generarReporte} 
                             disabled={cargando}
                             className="btn text-white fw-semibold w-100 py-2 rounded-3 shadow-sm d-flex align-items-center justify-content-center gap-2"
                             style={{ backgroundColor: '#4f46e5', border: 'none' }}
                         >
-                            {cargando ? (
-                                <span className="spinner-border spinner-border-sm" role="status"></span>
-                            ) : (
-                                <i className="fa-solid fa-magnifying-glass"></i>
-                            )}
-                            <span>{cargando ? 'Consultando...' : 'Mostrar Reporte'}</span>
+                            <i className={`fa-solid ${cargando ? 'fa-spin fa-rotate' : 'fa-magnifying-glass'}`}></i>
+                            <span>{cargando ? 'Consultando...' : 'Generar Reporte'}</span>
                         </button>
                     </div>
-
                 </div>
             </div>
 
-            {/* TARJETAS DE MÉTRICAS */}
+            {/* TARJETAS GLOBALES */}
             <div className="row g-3 mb-4">
                 <div className="col-12 col-md-4">
-                    <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                            <span className="text-muted small fw-semibold">Ingresos Totales (Período)</span>
-                            <div className="rounded-circle p-2 text-success d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px', backgroundColor: '#d1fae5' }}>
-                                <i className="fa-solid fa-arrow-trend-up"></i>
-                            </div>
-                        </div>
-                        <h3 className="fw-bold text-success mb-0">S/ {formatearSoles(totalIngresos)}</h3>
+                    <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 border-start border-4 border-success">
+                        <span className="text-muted extra-small fw-semibold text-uppercase d-block mb-1">Ingresos Totales</span>
+                        <h4 className="fw-bold text-success mb-0">{formatearSoles(granTotalIngresos)}</h4>
                     </div>
                 </div>
 
                 <div className="col-12 col-md-4">
-                    <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                            <span className="text-muted small fw-semibold">Egresos Totales (Período)</span>
-                            <div className="rounded-circle p-2 text-danger d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px', backgroundColor: '#fee2e2' }}>
-                                <i className="fa-solid fa-arrow-trend-down"></i>
-                            </div>
-                        </div>
-                        <h3 className="fw-bold text-danger mb-0">S/ {formatearSoles(totalEgresos)}</h3>
+                    <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 border-start border-4 border-danger">
+                        <span className="text-muted extra-small fw-semibold text-uppercase d-block mb-1">Egresos Totales</span>
+                        <h4 className="fw-bold text-danger mb-0">{formatearSoles(granTotalEgresos)}</h4>
                     </div>
                 </div>
 
                 <div className="col-12 col-md-4">
-                    <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
-                            <span className="text-muted small fw-semibold">Saldo Neto del Período</span>
-                            <div className="rounded-circle p-2 d-flex align-items-center justify-content-center" style={{ width: '36px', height: '36px', backgroundColor: '#e0e7ff', color: '#4f46e5' }}>
-                                <i className="fa-solid fa-chart-line"></i>
+                    <div className="card border-0 shadow-sm rounded-4 p-3 bg-white h-100 border-start border-4 border-primary">
+                        <span className="text-muted extra-small fw-semibold text-uppercase d-block mb-1">Saldo Neto Período</span>
+                        <h4 className={`fw-bold mb-0 ${granTotalNeto >= 0 ? 'text-primary' : 'text-danger'}`}>
+                            {formatearSoles(granTotalNeto)}
+                        </h4>
+                    </div>
+                </div>
+            </div>
+
+            {/* BUSCADOR RÁPIDO */}
+            <div className="mb-4">
+                <div className="input-group shadow-sm rounded-3">
+                    <span className="input-group-text bg-white border-0 ps-3 text-muted">
+                        <i className="fa-solid fa-magnifying-glass"></i>
+                    </span>
+                    <input 
+                        type="text" 
+                        className="form-control border-0 py-2.5 bg-white shadow-none"
+                        placeholder="Filtrar resultado por cliente, RUC/DNI, descripción de producto u observación..."
+                        value={buscarFiltro}
+                        onChange={(e) => setBuscarFiltro(e.target.value)}
+                    />
+                </div>
+            </div>
+
+            {/* LISTADO DE REPORTES AGRUPADOS NIVEL 1: NOMBRE DE CAJA */}
+            {listaGruposCaja.length === 0 ? (
+                <div className="card border-0 shadow-sm rounded-4 p-5 text-center bg-white">
+                    <i className="fa-solid fa-folder-open text-muted fs-1 mb-2"></i>
+                    <p className="text-muted mb-0">No se encontraron movimientos registrados para el rango de fechas seleccionado.</p>
+                </div>
+            ) : (
+                listaGruposCaja.map(grupo => (
+                    <div key={grupo.id} className="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white overflow-hidden">
+                        
+                        {/* HEADER DE GRUPO: NOMBRE DE CAJA */}
+                        <div className="d-flex justify-content-between align-items-center border-bottom pb-3 mb-3 flex-wrap gap-2">
+                            <div className="d-flex align-items-center gap-2">
+                                <div className="rounded-3 p-2 bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
+                                    <i className="fa-solid fa-box-archive fs-5"></i>
+                                </div>
+                                <div>
+                                    <h5 className="fw-bold text-dark mb-0">{grupo.nombre}</h5>
+                                    <span className="text-muted extra-small">{grupo.movimientos.length} movimiento(s) registrado(s)</span>
+                                </div>
+                            </div>
+
+                            {/* RESUMEN DE LA CAJA */}
+                            <div className="d-flex gap-3 text-end">
+                                <div>
+                                    <span className="extra-small text-muted d-block">Ingresos</span>
+                                    <strong className="text-success small">{formatearSoles(grupo.totalIngresos)}</strong>
+                                </div>
+                                <div className="border-start ps-3">
+                                    <span className="extra-small text-muted d-block">Egresos</span>
+                                    <strong className="text-danger small">{formatearSoles(grupo.totalEgresos)}</strong>
+                                </div>
+                                <div className="border-start ps-3">
+                                    <span className="extra-small text-muted d-block">Saldo Neto</span>
+                                    <strong className="text-dark small">{formatearSoles(grupo.neto)}</strong>
+                                </div>
                             </div>
                         </div>
-                        <h3 className={`fw-bold mb-0 ${saldoNeto >= 0 ? 'text-dark' : 'text-danger'}`}>
-                            S/ {formatearSoles(saldoNeto)}
-                        </h3>
-                    </div>
-                </div>
-            </div>
 
-            {/* TABLA DATATABLE */}
-            <div className="card border-0 shadow-sm rounded-4 p-4 bg-white">
-                <div className="row g-3 align-items-center justify-content-between mb-3">
-                    <div className="col-12 col-md-6">
-                        <h6 className="fw-bold text-dark m-0">Detalle de Movimientos Encontrados</h6>
-                    </div>
-                    <div className="col-12 col-md-6">
-                        <div className="input-group input-group-sm">
-                            <span className="input-group-text bg-light border-0 text-muted ps-3">
-                                <i className="fa-solid fa-magnifying-glass"></i>
-                            </span>
-                            <input 
-                                type="text" 
-                                className="form-control form-control-sm bg-light border-0 ps-2 py-2 rounded-end-3" 
-                                placeholder="Filtrar resultado por cliente, descripción..." 
-                                value={buscarText} 
-                                onChange={(e) => setBuscarText(e.target.value)} 
-                            />
+                        {/* TABLA ORDENADA */}
+                        <div className="table-responsive">
+                            <table className="table table-hover align-middle mb-0" style={{ minWidth: '850px' }}>
+                                <thead className="table-light text-secondary extra-small fw-bold">
+                                    <tr>
+                                        <th style={{ width: '130px' }}>Fecha / Hora</th>
+                                        <th style={{ width: '220px' }}>Cliente</th>
+                                        <th style={{ width: '250px' }}>Descripción / Productos</th>
+                                        <th style={{ width: '220px' }}>Desglose Categorías / Forma Pago</th>
+                                        <th className="text-end" style={{ width: '130px' }}>Total (S/)</th>
+                                        <th>Observación</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="small">
+                                    {grupo.movimientos.map(m => {
+                                        const valMonto = parseFloat(m.monto);
+                                        const esIngreso = valMonto >= 0;
+
+                                        return (
+                                            <tr key={m.id}>
+                                                {/* FECHA Y HORA */}
+                                                <td>
+                                                    <span className="fw-semibold text-dark d-block">{m.fecha}</span>
+                                                    <span className="text-muted extra-small d-block">
+                                                        <i className="fa-regular fa-clock me-1"></i>{m.hora}
+                                                    </span>
+                                                </td>
+
+                                                {/* CLIENTE */}
+                                                <td>
+                                                    {m.cliente ? (
+                                                        <>
+                                                            <strong className="text-dark d-block text-truncate" style={{ maxWidth: '210px' }} title={m.cliente.razon}>
+                                                                {m.cliente.razon}
+                                                            </strong>
+                                                            <span className="badge bg-light text-secondary border extra-small mt-0.5">
+                                                                {m.cliente.num_documento || 'Sin doc.'}
+                                                            </span>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-muted italic">- Eventual -</span>
+                                                    )}
+                                                </td>
+
+                                                {/* DESCRIPCIÓN Y PRODUCTOS */}
+                                                <td>
+                                                    <strong className="text-dark d-block">{m.descripcion}</strong>
+                                                    {m.detalles_productos && m.detalles_productos.map((dp, i) => (
+                                                        <span key={i} className="badge bg-light text-dark border extra-small me-1 mt-1 font-monospace">
+                                                            📦 {dp.cantidad}x {dp.producto?.descripcion} ({formatearSoles(dp.importe)})
+                                                        </span>
+                                                    ))}
+                                                    {m.garantia && (
+                                                        <span className="badge bg-warning bg-opacity-25 text-dark border border-warning extra-small me-1 mt-1 d-block w-fit">
+                                                            🛡️ Garantía: S/ {m.garantia.monto_garantia} ({m.garantia.estado})
+                                                        </span>
+                                                    )}
+                                                </td>
+
+                                                {/* DESGLOSE DE CATEGORÍAS */}
+                                                <td>
+                                                    {m.detalles && m.detalles.length > 0 ? (
+                                                        m.detalles.map((d, i) => {
+                                                            const imp = parseFloat(d.importe);
+                                                            const esPendiente = d.categoria?.nombre?.toUpperCase() === 'PENDIENTE';
+                                                            const colorClass = esPendiente ? 'text-primary' : (imp >= 0 ? 'text-success' : 'text-danger');
+                                                            const icon = esPendiente ? 'fa-clock' : (imp >= 0 ? 'fa-circle-plus' : 'fa-circle-minus');
+
+                                                            return (
+                                                                <div key={i} className="d-flex align-items-center justify-content-between extra-small py-0.5 border-bottom border-light">
+                                                                    <span className="fw-semibold text-secondary">
+                                                                        <i className={`fa-solid ${icon} ${colorClass} me-1`}></i>
+                                                                        {d.categoria?.nombre}:
+                                                                    </span>
+                                                                    <span className={`fw-bold ms-2 ${colorClass}`}>
+                                                                        {formatearSoles(imp)}
+                                                                    </span>
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <span className="text-muted extra-small">- Sin desglose -</span>
+                                                    )}
+                                                </td>
+
+                                                {/* MONTO TOTAL OPERACIÓN */}
+                                                <td className="text-end">
+                                                    <span className={`fw-bold fs-6 ${esIngreso ? 'text-success' : 'text-danger'}`}>
+                                                        {esIngreso ? '+ ' : ''}{formatearSoles(valMonto)}
+                                                    </span>
+                                                </td>
+
+                                                {/* OBSERVACIÓN */}
+                                                <td className="text-muted extra-small">
+                                                    {m.observacion ? (
+                                                        <span title={m.observacion}>{m.observacion}</span>
+                                                    ) : (
+                                                        <span>-</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                </div>
 
-                <DataTable
-                    columns={columnasReporte}
-                    data={movimientosFiltrados}
-                    pagination
-                    paginationPerPage={10}
-                    paginationRowsPerPageOptions={[10, 20, 50, 100]}
-                    paginationComponentOptions={opcionesPaginacion}
-                    noDataComponent={<div className="py-4 text-muted text-center">No se encontraron movimientos para el rango de fechas seleccionado.</div>}
-                    highlightOnHover
-                    responsive
-                />
-            </div>
+                    </div>
+                ))
+            )}
 
         </div>
     );

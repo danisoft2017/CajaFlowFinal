@@ -23,4 +23,8 @@ class DetalleMovimiento extends Model
     {
         return $this->belongsTo(Categoria::class);
     }
+    public function garantia()
+    {
+        return $this->hasOne(Garantia::class, 'movimiento_ingreso_id');
+    }
 }
