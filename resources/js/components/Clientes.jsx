@@ -58,7 +58,7 @@ function Clientes() {
         setMostrarModal(true);
     };
 
-// CONSULTA API SUNAT / RENIEC
+    // CONSULTA API SUNAT / RENIEC
     const consultarDocumentoApi = async () => {
         if (!numDocumento.trim()) {
             Swal.fire('Atención', 'Ingrese el número de documento a consultar.', 'warning');
@@ -79,7 +79,6 @@ function Clientes() {
 
         try {
             const token = localStorage.getItem('token');
-            // Llama a tu controlador enviando 'numero'
             const res = await axios.get(`/api/clientes/consultar-documento?numero=${numDocumento}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -134,10 +133,13 @@ function Clientes() {
         }
     };
 
-    const handleEliminar = (id, nombreCliente) => {
+    // ELIMINACIÓN DE CLIENTE (VALIDADO CONTRA MOVIMIENTOS)
+    const handleEliminarCliente = (cli) => {
+        if (!cli || !cli.id) return;
+
         Swal.fire({
-            title: `¿Eliminar "${nombreCliente}"?`,
-            text: "Esta acción removerá el cliente del sistema.",
+            title: `¿Eliminar a "${cli.razon}"?`,
+            text: "Esta acción solo se completará si el cliente no posee movimientos o registros asociados.",
             icon: 'warning',
             showCancelButton: true,
             confirmButtonColor: '#ef4444',
@@ -148,13 +150,18 @@ function Clientes() {
             if (result.isConfirmed) {
                 try {
                     const token = localStorage.getItem('token');
-                    await axios.delete(`/api/clientes/${id}`, {
+                    const response = await axios.delete(`/api/clientes/${cli.id}`, {
                         headers: { Authorization: `Bearer ${token}` }
                     });
-                    Swal.fire('¡Eliminado!', 'El cliente ha sido removido.', 'success');
+
+                    Swal.fire('¡Eliminado!', response.data?.message || 'Cliente removido con éxito.', 'success');
                     cargarClientes();
                 } catch (error) {
-                    Swal.fire('Error', error.response?.data?.message || 'No se pudo eliminar el cliente por movimientos asociados.', 'error');
+                    Swal.fire(
+                        'Acción no permitida', 
+                        error.response?.data?.message || 'No se puede eliminar este cliente porque posee movimientos asociados en el sistema.', 
+                        'error'
+                    );
                 }
             }
         });
@@ -263,19 +270,22 @@ function Clientes() {
                             <tr>
                                 <th>Tipo / Documento</th>
                                 <th>Razón Social / Nombre</th>
+                                <th>Saldo a Favor</th>
                                 <th className="text-end pe-3" style={{ width: '120px' }}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody className="small">
                             {clientesFiltrados.length === 0 ? (
                                 <tr>
-                                    <td colSpan="3" className="text-center text-muted py-4">
+                                    <td colSpan="4" className="text-center text-muted py-4">
                                         No se encontraron clientes registrados.
                                     </td>
                                 </tr>
                             ) : (
                                 clientesFiltrados.map((cli) => {
                                     const esRuc = cli.tipo_doc === 'RUC';
+                                    const saldo = parseFloat(cli.saldo_favor || 0);
+
                                     return (
                                         <tr key={cli.id}>
                                             <td>
@@ -306,6 +316,11 @@ function Clientes() {
                                                     </div>
                                                 </div>
                                             </td>
+                                            <td>
+                                                <span className={`fw-bold ${saldo > 0 ? 'text-success' : 'text-muted'}`}>
+                                                    S/ {saldo.toFixed(2)}
+                                                </span>
+                                            </td>
                                             <td className="text-end pe-3">
                                                 <div className="btn-group btn-group-sm">
                                                     <button 
@@ -316,9 +331,9 @@ function Clientes() {
                                                         <i className="fa-regular fa-pen-to-square"></i>
                                                     </button>
                                                     <button 
-                                                        onClick={() => handleEliminar(cli.id, cli.razon)}
-                                                        className="btn btn-light border text-danger rounded-2"
-                                                        title="Eliminar cliente"
+                                                        onClick={() => handleEliminarCliente(cli)} 
+                                                        className="btn btn-light border text-danger rounded-2 px-2 py-1"
+                                                        title="Eliminar Cliente"
                                                     >
                                                         <i className="fa-regular fa-trash-can"></i>
                                                     </button>
@@ -352,7 +367,6 @@ function Clientes() {
 
                             <form onSubmit={handleSubmit} className="modal-body pt-3">
                                 
-                                {/* TIPO DOC + INPUT NÚMERO CON BOTÓN DE BÚSQUEDA API */}
                                 <div className="row g-2 mb-3">
                                     <div className="col-4">
                                         <label className="form-label small fw-semibold text-secondary mb-1">Tipo Doc.</label>
@@ -378,7 +392,6 @@ function Clientes() {
                                                 required
                                                 style={{ boxShadow: 'none' }}
                                             />
-                                            {/* BOTÓN DE BÚSQUEDA API VUELTO A AGREGAR */}
                                             <button 
                                                 type="button"
                                                 onClick={consultarDocumentoApi}
@@ -398,7 +411,6 @@ function Clientes() {
                                     </div>
                                 </div>
 
-                                {/* RÁZÓN SOCIAL / NOMBRE */}
                                 <div className="mb-4">
                                     <label className="form-label small fw-semibold text-secondary mb-1">
                                         Razón Social / Nombre Completo *

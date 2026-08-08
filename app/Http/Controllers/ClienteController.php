@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cliente;
+use App\Models\Movimiento;
 use Illuminate\Http\Request;
+
 
 class ClienteController extends Controller
 {
@@ -49,6 +51,28 @@ class ClienteController extends Controller
         ]);
 
         return response()->json($cliente);
+    }
+
+    public function destroy($id)
+    {
+        // 1. Buscar al cliente
+        $cliente = Cliente::findOrFail($id);
+
+        // 2. Verificar si tiene movimientos registrados en la base de datos
+        $conteoMovimientos = Movimiento::where('cliente_id', $cliente->id)->count();
+
+        if ($conteoMovimientos > 0) {
+            return response()->json([
+                'message' => 'No se puede eliminar el cliente "' . $cliente->razon . '" porque tiene ' . $conteoMovimientos . ' movimiento(s) registrado(s).'
+            ], 400);
+        }
+
+        // 3. Eliminar si no tiene movimientos
+        $cliente->delete();
+
+        return response()->json([
+            'message' => 'Cliente eliminado correctamente.'
+        ], 200);
     }
 // Consulta directa a RENIEC / SUNAT
     public function consultarDocumento(Request $request)

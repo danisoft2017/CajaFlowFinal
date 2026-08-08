@@ -502,9 +502,6 @@ function Movimientos() {
             return;
         }
 
-        // Obtener el ID de la caja a partir de la primera categoría agregada en el desglose
-        const cajaDestinoFinal = detallesCategorias[0]?.caja_id || cajaActivaId;
-
         if (tipoRegistro === 'VENTA') {
             if (detallesProductos.length === 0) {
                 Swal.fire('Atención', 'En modo venta debe agregar al menos un producto a la lista.', 'warning');
@@ -519,47 +516,64 @@ function Movimientos() {
 
         try {
             const token = localStorage.getItem('token');
-            const payload = {
-                fecha: fechaModal,
-                hora: horaModal,
-                descripcion,
-                caja_id: cajaDestinoFinal, // 👈 Asigna la caja derivada de la categoría seleccionada
-                cliente_id: clienteId ? parseInt(clienteId) : null,
-                monto: sumaImportesCategorias,
-                observacion: observacion || null,
-                tiene_garantia: tieneGarantia,
-                monto_garantia: tieneGarantia ? parseFloat(montoGarantiaInput) : null,
-                usar_saldo_favor: usarSaldoFavor,
-                detalles: detallesCategorias.map(d => ({
-                    categoria_id: d.categoria_id,
-                    importe: d.importe
-                })),
-                detalles_productos: tipoRegistro === 'VENTA' ? detallesProductos.map(dp => ({
-                    almacen_id: dp.almacen_id,
-                    producto_id: dp.producto_id,
-                    precio: dp.precio,
-                    cantidad: dp.cantidad,
-                    importe: dp.importe
-                })) : []
-            };
+            const config = { headers: { Authorization: `Bearer ${token}` } };
 
-            if (editando) {
-                await axios.put(`/api/movimientos/${movimientoId}`, payload, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                Swal.fire('¡Actualizado!', 'Movimiento modificado.', 'success');
-            } else {
-                await axios.post('/api/movimientos', payload, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
-                Swal.fire('¡Guardado!', 'Movimiento registrado con éxito.', 'success');
-            }
+            // 1. AGRUPAR LOS DETALLES POR SU RESPECTIVA CAJA
+            const detallesPorCaja = {};
+
+            detallesCategorias.forEach(det => {
+                const idCajaDetalle = det.caja_id || cajaActivaId;
+                if (!detallesPorCaja[idCajaDetalle]) {
+                    detallesPorCaja[idCajaDetalle] = [];
+                }
+                detallesPorCaja[idCajaDetalle].push(det);
+            });
+
+            // 2. ENVIAR UNA PETICIÓN HTTP POR CADA CAJA SELECCIONADA
+            const promesasEnvio = Object.keys(detallesPorCaja).map(idCaja => {
+                const subdetalles = detallesPorCaja[idCaja];
+                const montoCaja = subdetalles.reduce((acc, d) => acc + d.importe, 0);
+
+                const payload = {
+                    fecha: fechaModal,
+                    hora: horaModal,
+                    descripcion,
+                    caja_id: parseInt(idCaja), // 👈 Asigna dinámicamente la caja correspondiente
+                    cliente_id: clienteId ? parseInt(clienteId) : null,
+                    monto: montoCaja,
+                    observacion: observacion || null,
+                    tiene_garantia: tieneGarantia,
+                    monto_garantia: tieneGarantia ? parseFloat(montoGarantiaInput) : null,
+                    usar_saldo_favor: usarSaldoFavor,
+                    detalles: subdetalles.map(d => ({
+                        categoria_id: d.categoria_id,
+                        importe: d.importe
+                    })),
+                    detalles_productos: tipoRegistro === 'VENTA' ? detallesProductos.map(dp => ({
+                        almacen_id: dp.almacen_id,
+                        producto_id: dp.producto_id,
+                        precio: dp.precio,
+                        cantidad: dp.cantidad,
+                        importe: dp.importe
+                    })) : []
+                };
+
+                if (editando) {
+                    return axios.put(`/api/movimientos/${movimientoId}`, payload, config);
+                } else {
+                    return axios.post('/api/movimientos', payload, config);
+                }
+            });
+
+            // 3. EJECUTAR LAS SOLICITUDES EN PARALELO
+            await Promise.all(promesasEnvio);
+
+            Swal.fire('¡Guardado!', 'Movimiento(s) registrado(s) correctamente en sus respectivas cajas.', 'success');
 
             setMostrarModal(false);
             limpiarFormularioModal();
-            // Actualizar la caja activa a la caja a la que se envió el movimiento para ver el registro de inmediato
-            setCajaActivaId(cajaDestinoFinal);
             cargarTodo();
+
         } catch (error) {
             Swal.fire('Error', error.response?.data?.message || 'Error al procesar el movimiento.', 'error');
         }
